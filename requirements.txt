@@ -1,0 +1,15 @@
+tiktoken
+faiss-cpu
+langchain
+PyPDF2
+python-dotenv
+streamlit
+openai
+chromadb
+fitz
+PyMuPDF
+frontend
+sentence-transformers
+cohere
+huggingface_hub
+pyresparser
