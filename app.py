@@ -1,79 +1,127 @@
 from dotenv import load_dotenv
 import os
+import fitz
 import streamlit as st
 from PyPDF2 import PdfReader
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain.embeddings.huggingface import HuggingFaceEmbeddings
+from langchain.embeddings.cohere import CohereEmbeddings
 from langchain.vectorstores import FAISS
-#from langchain.chains import LLMChain, LLMMathChain, SequentialChain, TransformChain
+from langchain.chains import LLMChain, LLMMathChain, SequentialChain, TransformChain, ConversationalRetrievalChain, RetrievalQA
 from langchain.chains.question_answering import load_qa_chain
 from langchain.llms import OpenAI
+from langchain.llms import HuggingFaceHub
+from langchain.llms import Cohere
 
+from pyresparser import ResumeParser
 
 load_dotenv(dotenv_path=".env")
 
 #create a Title for the App
-st.title("Resume-Based Job Recommendation and Skill Gap Analysis")
+st.title("_Resume-Based Job Recommendation_ :blue[& Skill Gap Analysis] :newspaper:")
 st.header("Upload Your Resume in PDF Format")
 pdf = st.file_uploader("Upload your PDF", type="pdf")
 
-# check if the uploaded file is not none
+# Display PDF content in a text area
 if pdf is not None:
-    pdf_reader = PdfReader(pdf)
-    text = ""
+    with open(os.path.join("tempDir",pdf.name),"wb") as f:
+         f.write(pdf.getbuffer())
 
-    for page in pdf_reader.pages:
-        text += page.extract_text()
+    subdirectory_path = os.path.join(os.getcwd(), "tempDir")
+    file_path = os.path.join(subdirectory_path, pdf.name)
+    #st.success(file_path)
+
     
+    pdf_reader = ResumeParser(file_path).get_extracted_data()
+     
+    
+    # Initializing empty lists for skills and experiences
+    skills = pdf_reader.get("skills", [])
+    experiences = pdf_reader.get("experience", [])
+
+    # Joining the skills and experiences lists into strings
+    skills_text = ", ".join(skills)
+    experiences_text = ",\n".join(experiences)
+
+    # Displaying the skills and experiences in a text area
+    st.text_area("Display extracted skills and experience", value=f"Skills:\n {skills_text}\n\nExperiences:\n {experiences_text}", height=300)
+    
+
+col1, col2 = st.columns(2)
+
+with col1:
+    query_option = st.text_area("Prompt", placeholder="Enter your questions here...", height=160)
+    
+
+with col2:
+    on = st.toggle("Advance Settings")
+    choose = "Cohere"  # Initialize choose outside the if block
+    temperature=0.7
+    if on:
+        choose = st.radio(
+            "Select Language Model👇",
+            ["Cohere", "OpenAI", "HuggingFace"],
+            key="visibility",
+            horizontal=True,
+        )
+        temperature = st.slider("Degree of reasoning", min_value=0.0, max_value=1.0, value=0.7, step=0.1)
+
+
+def choose_language_model(choose):
+    if choose == "Cohere":
+        llm = Cohere(temperature=temperature)
+    elif choose == "OpenAI":
+        llm = OpenAI(temperature=temperature)
+    else:
+        llm = HuggingFaceHub(repo_id="google/flan-t5-xxl", model_kwargs={"temperature": temperature})        
+            
+    return llm
+
+def choose_embeddings(choose):
+    if choose == "Cohere":
+        return CohereEmbeddings()
+    elif choose == "OpenAI":
+        return OpenAIEmbeddings()
+    else:
+        return HuggingFaceEmbeddings()
+
+# check if the uploaded file is not none
+
+
+if pdf is None:
+    st.button("Run", disabled=True) 
+
+else:
     text_splitter = CharacterTextSplitter(
         separator = "\n",
         chunk_size = 1000,
         chunk_overlap = 200,
         length_function = len
     )
+       
+    # split the text into smaller chunks
+    chunks = text_splitter.split_text(skills_text+experiences_text)
 
-    # split the text intp smaller chunks
-    chunks = text_splitter.split_text(text)
-
-    embeddings = OpenAIEmbeddings()
+    # select the embeddings we want to use
+    embeddings = choose_embeddings(choose)
 
     # create  a knowledge base
     knowledge_base = FAISS.from_texts(chunks, embeddings)
+   
+    # search the knowledge base for document
+    docs = knowledge_base.similarity_search(query_option)
+    
+    # initialize an a language model
+    llm = choose_language_model(choose)
 
-    option = st.selectbox("Choose an option", ["Match skills with Job", "Suggest addition skills", "show percentage match per job scale"], index=None)
+    # load a summarization chain
+    chain = load_qa_chain(llm, chain_type="stuff")
 
-    # query = st.text_input("Ask questions")
-
-    if option is not None:
-        # search the knowledge base for document
-        docs = knowledge_base.similarity_search(option)
-
-        # initialize an open AI model
-        llm = OpenAI()
-
-        # load a summarization chain
-        chain = load_qa_chain(llm, chain_type="stuff")
+    if st.button("Run", disabled=False):
 
         #run the chain with input document and user option
-        response = chain.run(input_documents = docs, question=option)
+        response = chain.run(input_documents = docs, question=query_option)
 
         # display the response generated by the AI model
         st.success(response)
-
-    # if option is not None:
-    #     # search the knowledge base for document
-    #     docs = knowledge_base.similarity_search(option)
-
-    #     # initialize an open AI model
-    #     llm = OpenAI()
-
-    #     # load a summarization chain
-    #     chain = load_qa_chain(llm, chain_type="stuff")
-
-    #     #run the chain with input document and user option
-    #     response = chain.run(input_documents = docs, question=option)
-
-    #     # display the response generated by the AI model
-    #     st.success(response)
-    # else:
-    #     st.write("You selected None.")
