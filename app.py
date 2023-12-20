@@ -21,10 +21,16 @@ load_dotenv(dotenv_path=".env")
 #create a Title for the App
 st.title("_Resume-Based Job Recommendation_ :blue[& Skill Gap Analysis] :newspaper:")
 st.header("Upload Your Resume in PDF Format")
-pdf = st.file_uploader("Upload your PDF", type="pdf")
+pdf = st.file_uploader("Upload your resume (PDF format)", type="pdf")
+
+#st.header("Copy and paste the job description")
+job_description_text = st.text_area("Copy and paste the job description", value=" ", placeholder="Paste the job description here")
+
+#skills_text = ""  # Initialize skills_text
+#experiences_text = ""
 
 # Display PDF content in a text area
-if pdf is not None:
+if pdf is not None or job_description_text.strip():
     with open(os.path.join("tempDir",pdf.name),"wb") as f:
          f.write(pdf.getbuffer())
 
@@ -43,9 +49,15 @@ if pdf is not None:
     # Joining the skills and experiences lists into strings
     skills_text = ", ".join(skills)
     experiences_text = ",\n".join(experiences)
+    
 
     # Displaying the skills and experiences in a text area
-    st.text_area("Display extracted skills and experience", value=f"Skills:\n {skills_text}\n\nExperiences:\n {experiences_text}", height=300)
+    st.subheader("Extracted Information:")
+    #st.text(f"Skills: {skills_text}")
+    #st.text(f"Experiences:\n{experiences_text}")
+    #st.text(f"Job Description:\n{job_description_text}")
+
+    st.text_area("Display extracted skills and experience", value=f"Skills:\n {skills_text}\n\nExperiences:\n {experiences_text}\n\nJob_Description:\n {job_description_text}", height=300)
     
 
 col1, col2 = st.columns(2)
@@ -101,7 +113,7 @@ else:
     )
        
     # split the text into smaller chunks
-    chunks = text_splitter.split_text(skills_text+experiences_text)
+    chunks = text_splitter.split_text(skills_text+experiences_text+job_description_text)
 
     # select the embeddings we want to use
     embeddings = choose_embeddings(choose)
